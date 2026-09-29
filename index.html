@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cocreacion-STEAM - Lienzo Mapa de Experiencia</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        :root {
+            --c-orange: #DC7E39;
+            --c-red: #C64D39;
+            --c-brown: #9C5F4F;
+            --c-navy: #142138;
+            --c-bg: #f4f5f7; 
+            --c-cell-bg: #fdf5f2; 
+            --c-text-dark: #142138;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+        body {
+            background-color: var(--c-bg); color: var(--c-text-dark);
+            margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 100vh;
+        }
+
+        /* --- HEADER --- */
+        .app-header {
+            background-color: var(--c-navy); color: white;
+            padding: 15px 30px; display: flex; align-items: center; justify-content: center;
+            border-bottom: 4px solid var(--c-orange);
+        }
+        .app-header h1 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: 0.5px; }
+
+        .main-content { padding: 20px; flex-grow: 1; }
+        .responsive-wrapper { width: 100%; overflow-x: auto; padding-bottom: 20px; }
+
+        /* --- LIENZO --- */
+        #lienzo-canvas {
+            background-color: #fff; padding: 25px; min-width: 1150px; margin: 0 auto;
+            border: 1px solid #ddd; box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+
+        .pdf-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px; padding-bottom: 10px; border-bottom: 3px solid var(--c-navy);
+        }
+        .pdf-header h2 { margin: 0; color: var(--c-navy); font-size: 26px; text-transform: uppercase; letter-spacing: 1px;}
+        .logo-img { height: 60px; width: auto; }
+
+        /* --- GRILLA --- */
+        .canvas-grid {
+            display: grid; grid-template-columns: 160px 140px repeat(4, minmax(240px, 1fr)); border: 1px solid #ddd;
+        }
+
+        .cell {
+            border: 1px solid #fff; padding: 12px; background-color: var(--c-cell-bg);
+            display: flex; flex-direction: column; gap: 8px; position: relative;
+        }
+
+        .header-main {
+            background-color: var(--c-red); color: white; font-weight: bold; font-size: 16px; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 10px;
+        }
+        .header-main small { font-weight: normal; font-size: 11px; margin-top: 5px; opacity: 0.9; }
+
+        .header-sub {
+            background-color: var(--c-brown); color: white; font-weight: normal; font-size: 14px; 
+            display: flex; align-items: center; justify-content: center; text-align: center; padding: 10px;
+        }
+
+        .moment-header {
+            background-color: var(--c-navy); color: white; font-weight: bold; 
+            font-size: 15px; text-align: center; padding: 8px; border: 1px solid rgba(255,255,255,0.2);
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* --- TEXTAREAS Y CONTADORES --- */
+        .persona-box {
+            grid-column: 1 / -1; background-color: #929dad; color: var(--c-navy); 
+            padding: 10px 15px; display: flex; flex-direction: row; align-items: center; gap: 15px; border-bottom: 2px solid #fff;
+        }
+        .persona-box h3 { margin: 0; font-size: 16px; white-space: nowrap; }
+
+        .textarea-container { position: relative; width: 100%; flex-grow: 1; display: flex; flex-direction: column; }
+        
+        textarea {
+            width: 100%; flex-grow: 1; background: #ffffff; border: 1px solid #ccc; color: var(--c-text-dark);
+            resize: none; padding: 8px 10px; font-size: 12px; border-radius: 4px;
+        }
+        .persona-box textarea { height: 45px; min-height: 45px; padding-right: 50px; }
+        
+        .char-counter { position: absolute; bottom: 5px; right: 8px; font-size: 9px; color: #888; pointer-events: none; }
+        .persona-box .char-counter { bottom: 8px; }
+
+        .btn-group { display: flex; flex-wrap: wrap; gap: 4px; }
+        .btn-check {
+            background: rgba(255,255,255,0.6); border: 1px solid #ccc; color: var(--c-text-dark);
+            padding: 6px 4px; font-size: 11px; cursor: pointer; border-radius: 20px; flex: 1 1 45%; text-align: center;
+        }
+        .btn-check.active { background: var(--c-orange); color: white; border-color: var(--c-orange); font-weight: bold; }
+
+        /* Sliders */
+        .sensor-item { display: flex; align-items: center; font-size: 11px; color: var(--c-text-dark); margin-bottom: 2px; }
+        .sensor-item label { width: 75px; font-weight: 500;}
+        input[type=range] {
+            flex-grow: 1; -webkit-appearance: none; height: 6px; background: #e0e0e0; border-radius: 3px; outline: none;
+            background-image: linear-gradient(var(--c-orange), var(--c-orange)); background-size: 0% 100%; background-repeat: no-repeat;
+        }
+
+        /* --- FILA INTENSIDAD --- */
+        /* Se incrementa el alto para darle respiro al SVG ampliado */
+        .polar-container { display: flex; justify-content: center; align-items: center; width: 100%; height: 210px; }
+
+        /* Efecto Zoom (Lupa) para Mapa Circunflejo */
+        .circumplex-svg {
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+            transform-origin: center center;
+            border-radius: 12px;
+            position: relative;
+            z-index: 1;
+            background-color: transparent;
+        }
+        .circumplex-svg.zoomed {
+            transform: scale(2.2);
+            z-index: 100;
+            background-color: var(--c-cell-bg);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            border: 1px solid var(--c-orange);
+        }
+
+        .actions { display: flex; justify-content: flex-end; gap: 15px; margin-top: 25px; padding: 0 20px 40px 20px; }
+        .action-btn {
+            background: var(--c-orange); border: none; padding: 14px 28px; color: #fff; font-weight: bold;
+            cursor: pointer; border-radius: 30px; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); transition: transform 0.1s;
+        }
+        .btn-limpiar { background: var(--c-navy); }
+        
+        #loading { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(20,33,56,0.9); color: white; z-index: 9999; flex-direction: column; justify-content: center; align-items: center; font-size: 18px; }
+    </style>
+</head>
+<body>
+
+    <div id="loading">Optimizando diseño editorial y ajustando formato A3...</div>
+
+    <header class="app-header">
+        <h1>Cocreacion-STEAM. Lienzo para diseño de experiencias</h1>
+    </header>
+
+    <main class="main-content">
+        <div class="responsive-wrapper">
+            <div id="lienzo-canvas">
+                
+                <div class="pdf-header">
+                    <h2>Mapa de Experiencia</h2>
+                    <img src="icon-192x192.png" alt="Logo" class="logo-img">
+                </div>
+
+                <div class="canvas-grid">
+                    
+                    <div class="persona-box">
+                        <h3>Persona</h3>
+                        <div class="textarea-container">
+                            <textarea id="persona-input" maxlength="500" placeholder="Perfil del destinatario (Modelo de Geert Hofstede)..." oninput="updateCounter(this, 'counter-persona')"></textarea>
+                            <span id="counter-persona" class="char-counter">0 / 500</span>
+                        </div>
+                    </div>
+
+                    <div class="moment-header" style="grid-column: 1 / span 2; background-color: var(--c-navy);"></div>
+                    <div class="moment-header">Iniciación</div>
+                    <div class="moment-header">Inmersión</div>
+                    <div class="moment-header">Conclusión</div>
+                    <div class="moment-header">Continuación</div>
+
+                    <div class="header-main" style="grid-row: span 2;">Significancia<br><small>Mapa de significados</small></div>
+                    <div class="header-sub">Capas de la<br>cultura</div>
+                    <script>
+                        for(let i=0; i<4; i++) {
+                            document.write(`
+                            <div class="cell">
+                                <div class="btn-group">
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">Símbolos</button>
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">Héroes</button>
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">Rituales</button>
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">Valores</button>
+                                </div>
+                            </div>`);
+                        }
+                    </script>
+
+                    <div class="header-sub" style="background-color: #a86c5c;">Satisfactores</div>
+                    <script>
+                        for(let i=0; i<4; i++) {
+                            document.write(`
+                            <div class="cell">
+                                <div class="btn-group">
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">TENER</button>
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">ESTAR</button>
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">HACER</button>
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">SER</button>
+                                </div>
+                            </div>`);
+                        }
+                    </script>
+
+                    <div class="header-main" style="background-color: #ba604d;">Intensidad</div>
+                    <div class="header-sub" style="background-color: #b57a69;">Mapa de<br>emociones</div>
+                    <script>
+                        for(let i=0; i<4; i++) { document.write(`<div class="cell polar-container"></div>`); }
+                    </script>
+
+                    <div class="header-main">Activadores</div>
+                    <div class="header-sub">Mapa<br>sensorial</div>
+                    <script>
+                        const sensors = ['Escúchame', 'Mírame', 'Tócame', 'Húeleme', 'Degústame', 'Búscame'];
+                        for(let i=0; i<4; i++) {
+                            let slidersHTML = sensors.map(s => `
+                                <div class="sensor-item">
+                                    <label>${s}</label>
+                                    <input type="range" min="1" max="5" value="1" oninput="updateRangeStyle(this)">
+                                </div>
+                            `).join('');
+                            document.write(`<div class="cell" style="justify-content: center;">${slidersHTML}</div>`);
+                        }
+                    </script>
+
+                    <div class="header-main" style="background-color: #ba604d;">Amplitud</div>
+                    <div class="header-sub" style="background-color: #b57a69;">Puntos de<br>contacto</div>
+                    <script>
+                        for(let i=1; i<=4; i++) {
+                            document.write(`
+                            <div class="cell">
+                                <div class="btn-group" style="margin-bottom: 5px;">
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">Analógico</button>
+                                    <button class="btn-check" onclick="this.classList.toggle('active')">Digital</button>
+                                </div>
+                                <div class="textarea-container">
+                                    <textarea id="amplitud-${i}" maxlength="100" placeholder="Punto de contacto..." oninput="updateCounter(this, 'count-amp-${i}')"></textarea>
+                                    <span id="count-amp-${i}" class="char-counter">0 / 100</span>
+                                </div>
+                            </div>`);
+                        }
+                    </script>
+
+                    <div class="header-main">Interacción</div>
+                    <div class="header-sub">Mapa de<br>Affordance</div>
+                    <script>
+                        for(let i=1; i<=4; i++) {
+                            document.write(`
+                            <div class="cell" style="flex-direction: row; align-items: stretch;">
+                                <div style="display: flex; flex-direction: column; gap: 5px; width: 40%; padding-right: 5px;">
+                                    <button class="btn-check" onclick="selectRadio(this)" style="flex: 1; font-size: 10px;">Dirigida</button>
+                                    <button class="btn-check" onclick="selectRadio(this)" style="flex: 1; font-size: 10px;">Co-creada</button>
+                                    <button class="btn-check" onclick="selectRadio(this)" style="flex: 1; font-size: 10px;">Improvisada</button>
+                                </div>
+                                <div class="textarea-container" style="width: 60%;">
+                                    <textarea id="interaccion-${i}" maxlength="100" placeholder="Interacción..." oninput="updateCounter(this, 'count-int-${i}')"></textarea>
+                                    <span id="count-int-${i}" class="char-counter">0 / 100</span>
+                                </div>
+                            </div>`);
+                        }
+                    </script>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="action-btn btn-limpiar" onclick="limpiarLienzo()">Limpiar lienzo</button>
+            <button class="action-btn" onclick="descargarPDF()">Descargar Diseño en PDF</button>
+        </div>
+    </main>
+
+    <script>
+        function updateCounter(textarea, counterId) {
+            const counter = document.getElementById(counterId);
+            counter.innerText = `${textarea.value.length} / ${textarea.getAttribute('maxlength')}`;
+        }
+
+        function updateRangeStyle(input) {
+            const val = (input.value - input.min) / (input.max - input.min) * 100;
+            input.style.backgroundSize = val + '% 100%';
+            input.setAttribute('value', input.value); 
+        }
+
+        function selectRadio(btn) {
+            const parent = btn.parentElement;
+            parent.querySelectorAll('.btn-check').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        // --- LÓGICA DEL MAPA CIRCUNFLEJO ---
+        function describeArc(x, y, r, startAngle, endAngle) {
+            var start = polarToCartesian(x, y, r, endAngle);
+            var end = polarToCartesian(x, y, r, startAngle);
+            var largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+            return ["M", x, y, "L", start.x, start.y, "A", r, r, 0, largeArcFlag, 0, end.x, end.y, "Z"].join(" ");
+        }
+
+        function polarToCartesian(cx, cy, r, angleInDegrees) {
+            var angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+            return { x: cx + (r * Math.cos(angleInRadians)), y: cy + (r * Math.sin(angleInRadians)) };
+        }
+
+        function createSVGText(x, y, textStr, textStr2, align, color, fontSize, rotation, anchorX, anchorY) {
+            const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            txt.setAttribute("x", x); 
+            txt.setAttribute("y", y);
+            txt.setAttribute("fill", color); 
+            txt.setAttribute("font-size", fontSize);
+            txt.setAttribute("text-anchor", align); 
+            txt.setAttribute("dominant-baseline", "middle"); 
+            txt.setAttribute("pointer-events", "none");
+            
+            if (rotation !== 0) {
+                txt.setAttribute("transform", `rotate(${rotation}, ${anchorX}, ${anchorY})`);
+            }
+            
+            // Primer línea
+            const ts1 = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+            ts1.setAttribute("x", x); 
+            // Si hay dos líneas, desplazamos la primera hacia arriba para mantener el centro vertical
+            ts1.setAttribute("dy", textStr2 ? `-${fontSize * 0.2}` : "0"); 
+            ts1.textContent = textStr;
+            txt.appendChild(ts1);
+            
+            // Segunda línea
+            if (textStr2) {
+                const ts2 = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                ts2.setAttribute("x", x); 
+                ts2.setAttribute("dy", fontSize * 1.2); 
+                ts2.textContent = textStr2;
+                txt.appendChild(ts2);
+            }
+            
+            return txt;
+        }
+
+        function initCircumplex() {
+            // Textos interiores (Sobre bisectrices)
+            const emotions = [
+                { t: "Emocionado - Animado", angle: 22.5 },
+                { t: "Alegre - Feliz", angle: 67.5 },
+                { t: "Relajado - Sereno", angle: 112.5 },
+                { t: "Calmado - Tranquilo", angle: 157.5 },
+                { t: "Sombrío - Triste", angle: 202.5 },
+                { t: "Aburrido - Cansado", angle: 247.5 },
+                { t: "Irritado - Molesto", angle: 292.5 },
+                { t: "Tenso - Nervioso", angle: 337.5 }
+            ];
+
+            document.querySelectorAll('.polar-container').forEach(container => {
+                const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                // viewBox asimétrico ampliado horizontalmente para alojar los textos exteriores horizontales
+                svg.setAttribute("viewBox", "-40 -20 180 140"); 
+                svg.classList.add("circumplex-svg"); 
+                
+                // Efecto Lupa (Zoom In/Out)
+                svg.addEventListener('mouseenter', function() {
+                    if (this.dataset.locked !== 'true') {
+                        this.classList.add('zoomed');
+                        this.parentElement.style.zIndex = '100'; 
+                    }
+                });
+                svg.addEventListener('mouseleave', function() {
+                    this.classList.remove('zoomed');
+                    this.parentElement.style.zIndex = '1'; 
+                    this.dataset.locked = 'false'; 
+                });
+
+                const cx = 50, cy = 50;
+
+                // 1. Dibujar Sectores de Color
+                for (let i = 0; i < 8; i++) {
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("d", describeArc(cx, cy, 45, i * 45, (i + 1) * 45));
+                    path.setAttribute("fill", "transparent"); 
+                    path.style.cursor = "pointer";
+                    path.classList.add("emotion-slice");
+                    
+                    path.onclick = function() {
+                        svg.querySelectorAll('.emotion-slice').forEach(p => p.setAttribute("fill", "transparent"));
+                        this.setAttribute("fill", "rgba(220, 126, 57, 0.4)");
+                        this.setAttribute("data-selected", "true");
+                        
+                        svg.classList.remove('zoomed');
+                        svg.parentElement.style.zIndex = '1';
+                        svg.dataset.locked = 'true';
+                    };
+                    svg.appendChild(path);
+                }
+
+                // 2. Dibujar Geometría y Ejes
+                const drawLine = (x1, y1, x2, y2) => {
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    line.setAttribute("x1", x1); line.setAttribute("y1", y1); line.setAttribute("x2", x2); line.setAttribute("y2", y2); 
+                    line.setAttribute("stroke", "#bbb"); line.setAttribute("stroke-width", "0.5"); line.setAttribute("pointer-events", "none");
+                    return line;
+                };
+                
+                svg.appendChild(drawLine(5, 50, 95, 50)); // Eje horizontal
+                svg.appendChild(drawLine(50, 5, 50, 95)); // Eje vertical
+                
+                let p1 = polarToCartesian(cx, cy, 45, 45); let p2 = polarToCartesian(cx, cy, 45, 225);
+                svg.appendChild(drawLine(p1.x, p1.y, p2.x, p2.y)); // Diagonal 1
+                p1 = polarToCartesian(cx, cy, 45, 135); p2 = polarToCartesian(cx, cy, 45, 315);
+                svg.appendChild(drawLine(p1.x, p1.y, p2.x, p2.y)); // Diagonal 2
+
+                const outerCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                outerCircle.setAttribute("cx", cx); outerCircle.setAttribute("cy", cy); outerCircle.setAttribute("r", "45");
+                outerCircle.setAttribute("fill", "none"); outerCircle.setAttribute("stroke", "#bbb"); outerCircle.setAttribute("stroke-width", "0.5");
+                outerCircle.setAttribute("pointer-events", "none");
+                svg.appendChild(outerCircle);
+
+                [15, 30].forEach(r => {
+                    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    circle.setAttribute("cx", cx); circle.setAttribute("cy", cy); circle.setAttribute("r", r);
+                    circle.setAttribute("fill", "none"); circle.setAttribute("stroke", "#ccc"); circle.setAttribute("stroke-width", "0.5"); 
+                    circle.setAttribute("stroke-dasharray", "1 1"); circle.setAttribute("pointer-events", "none");
+                    svg.appendChild(circle);
+                });
+
+                // 3. Insertar los Textos Internos (Mayor tamaño de fuente y empujados radialmente)
+                emotions.forEach(e => {
+                    const pos = polarToCartesian(cx, cy, 25, e.angle); // Radio aumentado a 25 para evitar el centro
+                    let rot = e.angle < 180 ? e.angle - 90 : e.angle + 90;
+                    
+                    // font-size incrementado a 3.0
+                    svg.appendChild(createSVGText(pos.x, pos.y, e.t, "", "middle", "#142138", 3.0, rot, pos.x, pos.y));
+                });
+
+                // 4. Insertar Etiquetas Exteriores en Orientación Horizontal y Multi-línea
+                
+                // Arriba: Centrado horizontal
+                svg.appendChild(createSVGText(cx, -10, "Nivel de", "activación alto", "middle", "#142138", 4.0, 0, cx, -10));
+                
+                // Abajo: Centrado horizontal
+                svg.appendChild(createSVGText(cx, 110, "Nivel de", "activación bajo", "middle", "#142138", 4.0, 0, cx, 110));
+                
+                // Izquierda: Alineación Textual Izquierda (start)
+                svg.appendChild(createSVGText(-36, cy, "Displacer", "(Valencia negativa)", "start", "#142138", 4.0, 0, -36, cy));
+                
+                // Derecha: Alineación Textual Derecha (end)
+                svg.appendChild(createSVGText(136, cy, "Placer", "(Valencia positiva)", "end", "#142138", 4.0, 0, 136, cy));
+
+                container.appendChild(svg);
+            });
+        }
+
+        window.onload = initCircumplex;
+
+        function limpiarLienzo() {
+            if(!confirm("¿Estás seguro de que deseas limpiar todo el lienzo?")) return;
+            document.querySelectorAll('.active').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('input[type="range"]').forEach(el => { el.value = 1; updateRangeStyle(el); });
+            document.querySelectorAll('textarea').forEach(el => { el.value = ''; updateCounter(el, el.nextElementSibling.id); });
+            document.querySelectorAll('.emotion-slice').forEach(el => el.setAttribute('fill', 'transparent'));
+        }
+
+        async function descargarPDF() {
+            document.querySelectorAll('.circumplex-svg').forEach(svg => {
+                svg.classList.remove('zoomed');
+                svg.parentElement.style.zIndex = '1';
+            });
+
+            const element = document.getElementById('lienzo-canvas');
+            const loading = document.getElementById('loading');
+            loading.style.display = 'flex';
+
+            try {
+                const clones = [];
+                element.querySelectorAll('.textarea-container').forEach(container => {
+                    const ta = container.querySelector('textarea');
+                    const count = container.querySelector('.char-counter');
+                    
+                    const div = document.createElement('div');
+                    div.style.cssText = `width: 100%; min-height: ${ta.offsetHeight}px; font-size: 12px; color: #142138; background: #fff; padding: 8px; border: 1px solid #ccc; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.2; box-sizing: border-box;`;
+                    div.innerText = ta.value || " ";
+                    
+                    container.insertBefore(div, ta);
+                    ta.style.display = 'none';
+                    count.style.display = 'none';
+                    clones.push({ ta, count, div });
+                });
+
+                element.querySelectorAll('input[type="range"]').forEach(r => {
+                    const pct = ((r.value - 1) / 4) * 100;
+                    const track = document.createElement('div');
+                    track.style.cssText = `width: 100%; height: 6px; background: linear-gradient(to right, #DC7E39 ${pct}%, #e0e0e0 ${pct}%); border-radius: 3px; margin: 5px 0;`;
+                    r.parentNode.insertBefore(track, r);
+                    r.style.display = 'none';
+                    clones.push({ original: r, clone: track });
+                });
+
+                const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+                
+                clones.forEach(item => {
+                    if(item.ta) {
+                        item.ta.style.display = 'block';
+                        item.count.style.display = 'block';
+                        item.div.remove();
+                    } else {
+                        item.original.style.display = 'block';
+                        item.clone.remove();
+                    }
+                });
+
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('l', 'mm', 'a3'); 
+                const imgData = canvas.toDataURL('image/jpeg', 0.98);
+                
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgProps = pdf.getImageProperties(imgData);
+                
+                const margin = 5; 
+                const maxPdfWidth = pdfWidth - (margin * 2);
+                const maxPdfHeight = pdfHeight - (margin * 2);
+
+                let finalWidth = maxPdfWidth;
+                let finalHeight = (imgProps.height * maxPdfWidth) / imgProps.width;
+
+                if (finalHeight > maxPdfHeight) {
+                    finalHeight = maxPdfHeight;
+                    finalWidth = (imgProps.width * maxPdfHeight) / imgProps.height;
+                }
+
+                const xOffset = margin + (maxPdfWidth - finalWidth) / 2;
+                const yOffset = margin + (maxPdfHeight - finalHeight) / 2;
+
+                pdf.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
+                pdf.save('Mapa_de_Experiencia_Cocreacion_STEAM.pdf');
+
+            } catch (error) {
+                console.error(error);
+                alert("Error al generar el PDF.");
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
